@@ -105,6 +105,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
         DispatchMessage(&msg);
     }
 
+    // убираем за собой
+    DestroyWindow(hwnd);
+    UnregisterClassA(CLASS_NAME, hInstance);
+
     return 0;
 
 }
