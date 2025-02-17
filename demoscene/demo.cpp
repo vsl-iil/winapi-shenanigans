@@ -1,8 +1,9 @@
 // https://gargaj.github.io/demos-for-dummies/#intro/1
 
 #include <Windows.h>
-#include <stdbool.h>
-#include <stdio.h>
+#include <d3d11.h>
+#define MINIAUDIO_IMPLEMENTATION
+#include "..\external\miniaudio.h"
 
 bool gWindowWantsToQuit = false;
 
@@ -42,6 +43,7 @@ int main() {
 
     WNDCLASSA windowClass;
     windowClass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+    windowClass.lpfnWndProc = &WndProc;
     windowClass.cbClsExtra = 0;
     windowClass.cbWndExtra = 0;
     windowClass.hInstance = GetModuleHandle(NULL);
@@ -52,8 +54,8 @@ int main() {
     windowClass.lpszClassName = CLASS_NAME;
 
     if (!RegisterClassA(&windowClass)) {
-        printf("RegisterClassA failed because %ld", GetLastError());
-        return 1;
+        // printf("RegisterClassA failed because %ld", GetLastError());
+        return 420;
     }
 
     const int width = 1280;
@@ -66,9 +68,23 @@ int main() {
     HWND hWnd = CreateWindowExA(exStyle, CLASS_NAME, "Demos for Dummies", style, 0, 0, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top, NULL, NULL, windowClass.hInstance, NULL);
 
     if (!hWnd) {
-        printf("CreateWindow failed because %ld", GetLastError());
         return 2;
     }
+
+    ///////////////////////// AUDIO ////////////////////////
+    ma_engine engine;
+    if (ma_engine_init(NULL, &engine) != MA_SUCCESS) {
+        return 3;
+    }
+
+    ma_sound sound;
+    if (ma_sound_init_from_file(&engine, "audio.mp3", 0, NULL, NULL, &sound) != MA_SUCCESS) {
+        return 4;
+    }
+
+    ma_sound_set_looping(&sound, MA_TRUE);
+    ma_sound_start(&sound);
+    ///////////////////////////////////////////////////////////
 
     while (!gWindowWantsToQuit) {
         MSG msg;
@@ -76,7 +92,13 @@ int main() {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
+    
+        float cursor = 0.0f;
+        ma_sound_get_cursor_in_seconds(&sound, &cursor);
     }
+
+    ma_sound_stop(&sound);
+    ma_engine_stop(&engine);
 
     DestroyWindow(hWnd);
     UnregisterClassA(CLASS_NAME, GetModuleHandle(NULL));
