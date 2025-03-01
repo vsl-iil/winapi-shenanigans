@@ -1,4 +1,4 @@
-// https://gargaj.github.io/demos-for-dummies/#graphics-dxinit/2
+// https://gargaj.github.io/demos-for-dummies/#graphics-meshload/1
 
 #include <algorithm>
 #include <Windows.h>
@@ -8,6 +8,11 @@
 #include <dxgiformat.h>
 #define MINIAUDIO_IMPLEMENTATION
 #include "..\external\miniaudio.h"
+
+// а так можно было?
+#pragma comment(lib,"user32.lib")
+#pragma comment(lib,"gdi32.lib")
+#pragma comment(lib,"d3d11.lib")
 
 bool gWindowWantsToQuit = false;
 
