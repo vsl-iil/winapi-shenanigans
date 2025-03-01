@@ -1,7 +1,11 @@
-// https://gargaj.github.io/demos-for-dummies/#intro/1
+// https://gargaj.github.io/demos-for-dummies/#graphics-dxinit/2
 
+#include <algorithm>
 #include <Windows.h>
 #include <d3d11.h>
+#include <d3dcommon.h>
+#include <dxgi.h>
+#include <dxgiformat.h>
 #define MINIAUDIO_IMPLEMENTATION
 #include "..\external\miniaudio.h"
 
@@ -71,21 +75,59 @@ int main() {
         return 2;
     }
 
+    //////////////////////// DIRECTX ////////////////////////
+    DXGI_SWAP_CHAIN_DESC desc = { 0 };
+    desc.BufferCount = 2;
+    desc.BufferDesc.Width = width;
+    desc.BufferDesc.Height = height;
+    desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    desc.OutputWindow = hWnd;
+    desc.SampleDesc.Count = 1;
+    desc.Windowed = true;
+
+    ID3D11Device* device = NULL;
+    ID3D11DeviceContext* context = NULL;
+    IDXGISwapChain* swapchain = NULL;
+
+    if (D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, 0, NULL, 0, D3D11_SDK_VERSION, &desc, &swapchain, &device, NULL, &context) != S_OK) {
+        return 4;
+    }
+
+    ID3D11Texture2D* backBuffer = NULL;
+    ID3D11RenderTargetView* backBufferView = NULL;
+    swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer);
+    device->CreateRenderTargetView(backBuffer, NULL, &backBufferView);
+
+    D3D11_TEXTURE2D_DESC depthDesc = CD3D11_TEXTURE2D_DESC(DXGI_FORMAT_R24G8_TYPELESS, width, height, 1, 1, D3D11_BIND_DEPTH_STENCIL);
+    ID3D11Texture2D* depthStencil = NULL;
+    if (device->CreateTexture2D(&depthDesc, NULL, &depthStencil) != S_OK) {
+        return 5;
+    }
+
+    D3D11_DEPTH_STENCIL_VIEW_DESC descDSV = CD3D11_DEPTH_STENCIL_VIEW_DESC(D3D11_DSV_DIMENSION_TEXTURE2D, DXGI_FORMAT_D24_UNORM_S8_UINT);
+    ID3D11DepthStencilView* depthStencilView = NULL;
+    if (device->CreateDepthStencilView(depthStencil, &descDSV, &depthStencilView) != S_OK) {
+        return 6;
+    }
     ///////////////////////// AUDIO ////////////////////////
     ma_engine engine;
     if (ma_engine_init(NULL, &engine) != MA_SUCCESS) {
-        return 3;
+        return 10;
     }
 
     ma_sound sound;
     if (ma_sound_init_from_file(&engine, "audio.mp3", 0, NULL, NULL, &sound) != MA_SUCCESS) {
-        return 4;
+        return 11;
     }
 
     ma_sound_set_looping(&sound, MA_TRUE);
     ma_sound_start(&sound);
     ///////////////////////////////////////////////////////////
 
+    float total = 0.0f;
+    ma_sound_get_length_in_seconds(&sound, &total);
     while (!gWindowWantsToQuit) {
         MSG msg;
         if (PeekMessage(&msg, hWnd, 0, 0, PM_REMOVE)) {
@@ -95,10 +137,26 @@ int main() {
     
         float cursor = 0.0f;
         ma_sound_get_cursor_in_seconds(&sound, &cursor);
+        float red   = (std::max)(0.0f, (std::min)(6.0f * (float)fabs((cursor/total)-0.5f) - 1.0f, 1.0f));
+        float green = (std::max)(0.0f, (std::min)(-(6.0f * (float)fabs((cursor/total)-0.33f) - 2.0f), 1.0f));
+        float blue  = (std::max)(0.0f, (std::min)(-(6.0f * (float)fabs((cursor/total)-0.67f) - 2.0f), 1.0f));
+
+        const float clearColor[4] = {red, green, blue, 0.0f};
+        context->ClearRenderTargetView(backBufferView, clearColor);
+        context->ClearDepthStencilView(depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+        swapchain->Present(0, 0);
     }
 
     ma_sound_stop(&sound);
     ma_engine_stop(&engine);
+
+    depthStencilView->Release();
+    depthStencil->Release();
+    backBufferView->Release();
+    backBuffer->Release();
+    context->Release();
+    device->Release();
 
     DestroyWindow(hWnd);
     UnregisterClassA(CLASS_NAME, GetModuleHandle(NULL));
