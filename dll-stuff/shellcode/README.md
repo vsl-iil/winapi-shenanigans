@@ -80,3 +80,5 @@ run
 * [CPP / C++ - Embed Resources Into Executables](https://caiorss.github.io/C-Cpp-Notes/resources-executable.html)
 
 * [Embedding binary data with Windows Resource Compiler](https://macoy.me/blog/programming/WindowsResourceCompiler)
+
+* [The Inner Working of FindResource() and LoadString() Win32 Functions](https://www.codeproject.com/Articles/431045/The-Inner-Working-of-FindResource-and-LoadString-W)
