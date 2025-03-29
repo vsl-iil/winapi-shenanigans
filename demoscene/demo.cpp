@@ -1,4 +1,4 @@
-// https://gargaj.github.io/demos-for-dummies/#graphics-meshload/1
+// https://gargaj.github.io/demos-for-dummies/#graphics-textures/1
 
 #define _CRT_SECURE_NO_WARNINGS
 #include <algorithm>
@@ -11,6 +11,8 @@
 
 #define CGLTF_IMPLEMENTATION
 #include "..\external\cgltf.h"
+
+#include "..\external\ccVector.h"
 
 // а так можно было?
 // указываем, какие библиотеки компилятор должен слинковать. 
@@ -168,9 +170,24 @@ int main() {
         return 10;
     }
 
+    float constantBufferData[32] = { 0 };
+    D3D11_BUFFER_DESC constantBufferDesc = CD3D11_BUFFER_DESC(sizeof(constantBufferData), D3D11_BIND_CONSTANT_BUFFER, D3D11_USAGE_DYNAMIC, D3D11_CPU_ACCESS_WRITE);
+    D3D11_SUBRESOURCE_DATA constantSubData = { 0 };
+    constantSubData.pSysMem = constantBufferData;
+    ID3D11Buffer* constantBuffer = NULL;
+
+    if (device->CreateBuffer(&constantBufferDesc, &constantSubData, &constantBuffer) != S_OK) {
+        return 11;
+    }
     //////////////////////// SHADERS ////////////////////////
 
     char shaderSource[] = R"(
+      cbuffer c 
+      {
+        float4x4 projectionMatrix;
+        float4x4 worldMatrix;
+      };
+
       struct VS_INPUT
       {
         float3 Pos: POSITION;
@@ -185,6 +202,8 @@ int main() {
       {
         VS_OUTPUT Out;
         Out.Pos = float4( In.Pos, 1.0 );
+        Out.Pos = mul(worldMatrix, Out.Pos);
+        Out.Pos = mul(projectionMatrix, Out.Pos);
         return Out;
       }
 
@@ -198,21 +217,21 @@ int main() {
     // vertex shader compile
     ID3DBlob* vertexShaderBlob = NULL;
     if (D3DCompile(shaderSource, strlen(shaderSource), NULL, NULL, NULL, "vs_main", "vs_5_0", 0, 0, &vertexShaderBlob, NULL) != S_OK) {
-        return 11;
+        return 12;
     }
     ID3D11VertexShader* vertexShader = NULL;
     if (device->CreateVertexShader(vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), NULL, &vertexShader) != S_OK) {
-        return 12;
+        return 13;
     }
 
     // pixel shader compile
     ID3DBlob* pixelShaderBlob = NULL;
     if (D3DCompile(shaderSource, strlen(shaderSource), NULL, NULL, NULL, "ps_main", "ps_5_0", 0, 0, &pixelShaderBlob, NULL) != S_OK) {
-        return 13;
+        return 14;
     }
     ID3D11PixelShader* pixelShader = NULL;
     if (device->CreatePixelShader(pixelShaderBlob->GetBufferPointer(), pixelShaderBlob->GetBufferSize(), NULL, &pixelShader) != S_OK) {
-        return 14;
+        return 15;
     }
 
     static D3D11_INPUT_ELEMENT_DESC inputDesc[] = {
@@ -221,7 +240,7 @@ int main() {
 
     ID3D11InputLayout* inputLayout = NULL;
     if (device->CreateInputLayout(inputDesc, 1, vertexShaderBlob->GetBufferPointer(), vertexShaderBlob->GetBufferSize(), &inputLayout) != S_OK) {
-        return 15;
+        return 16;
     }
 
     ///////////////////////// AUDIO ////////////////////////
@@ -259,6 +278,23 @@ int main() {
         context->ClearRenderTargetView(backBufferView, clearColor);
         context->ClearDepthStencilView(depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
+        // DEMO HERE
+        mat4x4& projectionMatrix = *(mat4x4*)&constantBufferData[0];
+        mat4x4Perspective(projectionMatrix, 3.1415f * 0.25f, width / (float)height, 0.01f, 10.0f);
+
+        mat4x4& worldMatrix = *(mat4x4*)&constantBufferData[16];
+        mat4x4Identity(worldMatrix);
+        mat4x4RotateY(worldMatrix, cursor);
+        const vec3 translation = { 0.0f, 0.0f, -5.0f };
+        mat4x4Translate(worldMatrix, translation);
+
+        /////////////////////////
+
+        D3D11_MAPPED_SUBRESOURCE mappedSubRes;
+        context->Map(constantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedSubRes);
+        CopyMemory(mappedSubRes.pData, constantBufferData, constantBufferDesc.ByteWidth);
+        context->Unmap(constantBuffer, 0);
+
         // render model
         // set viewport
         const D3D11_VIEWPORT viewport = CD3D11_VIEWPORT(0.0f, 0.0f, (float)width, (float)height);
@@ -266,6 +302,9 @@ int main() {
 
         // render target - back buffer
         context->OMSetRenderTargets(1, &backBufferView, depthStencilView);
+
+        // constant buffers
+        context->VSSetConstantBuffers(0, 1, &constantBuffer);
 
         // set shaders, rasterizer state & input layout
         context->VSSetShader(vertexShader, NULL, 0);
@@ -304,6 +343,7 @@ int main() {
     depthStencil->Release();
     backBufferView->Release();
     backBuffer->Release();
+    constantBuffer->Release();
     pixelShader->Release();
     vertexShader->Release();
     vertexBuffer->Release();
